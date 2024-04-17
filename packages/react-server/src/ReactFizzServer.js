@@ -1812,15 +1812,22 @@ function flushSubtree(
       for (let childIdx = 0; childIdx < children.length; childIdx++) {
         const nextChild = children[childIdx];
         // Write all the chunks up until the next child.
-        for (; chunkIdx < nextChild.index; chunkIdx++) {
-          writeChunk(destination, chunks[chunkIdx]);
+        // for (; chunkIdx < nextChild.index; chunkIdx++) {
+        //   writeChunk(destination, chunks[chunkIdx]);
+        // }
+        if (chunkIdx < nextChild.index) {
+          writeChunk(destination, chunks.slice(chunkIdx, nextChild.index));
+          chunkIdx = nextChild.index;
         }
         r = flushSegment(request, destination, nextChild);
       }
       // Finally just write all the remaining chunks
-      for (; chunkIdx < chunks.length - 1; chunkIdx++) {
-        writeChunk(destination, chunks[chunkIdx]);
+      if (chunkIdx < chunks.length - 1) {
+        writeChunk(destination, chunks.slice(chunkIdx));
       }
+      // for (; chunkIdx < chunks.length - 1; chunkIdx++) {
+      //   writeChunk(destination, chunks[chunkIdx]);
+      // }
       if (chunkIdx < chunks.length) {
         r = writeChunkAndReturn(destination, chunks[chunkIdx]);
       }
