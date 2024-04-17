@@ -82,12 +82,21 @@ function writeChunks(
   function _writeToDestination(_destination, view) {
     waitToWriteArray.push(new Uint8Array(view));
   }
+  const chunksLength = chunks.length;
   // eslint-disable-next-line no-for-of-loops/no-for-of-loops
-  for (const mixChunk of chunks) {
+  for (const [i, mixChunk] of chunks.entries()) {
+    let mergedString = '';
     if (typeof mixChunk === 'string') {
-      const stringChunk = mixChunk;
+      let stringChunk = mixChunk;
       if (stringChunk.length === 0) {
         continue;
+      }
+      if (i + 1 < chunksLength && typeof chunks[i + 1] === 'string') {
+        mergedString += chunks[i];
+        continue;
+      } else if (mergedString) {
+        stringChunk = mergedString;
+        mergedString = '';
       }
       // maximum possible view needed to encode entire string
       if (stringChunk.length * 3 > VIEW_SIZE) {
