@@ -34,6 +34,23 @@ export function flushBuffered(destination: Destination) {
   }
 }
 
+function mergeUint8Arrays(uint8arrays) {
+  const totalLength = uint8arrays.reduce(
+    (total, uint8array) => total + uint8array.byteLength,
+    0,
+  );
+
+  const result = new Uint8Array(totalLength);
+
+  let offset = 0;
+  uint8arrays.forEach(uint8array => {
+    result.set(uint8array, offset);
+    offset += uint8array.byteLength;
+  });
+
+  return result;
+}
+
 const VIEW_SIZE = 2048;
 let currentView = null;
 let writtenBytes = 0;
@@ -45,106 +62,357 @@ export function beginWriting(destination: Destination) {
   destinationHasCapacity = true;
 }
 
-function writeStringChunk(destination: Destination, stringChunk: string) {
-  if (stringChunk.length === 0) {
-    return;
-  }
-  // maximum possible view needed to encode entire string
-  if (stringChunk.length * 3 > VIEW_SIZE) {
-    if (writtenBytes > 0) {
-      writeToDestination(
-        destination,
-        ((currentView: any): Uint8Array).subarray(0, writtenBytes),
-      );
-      currentView = new Uint8Array(VIEW_SIZE);
-      writtenBytes = 0;
-    }
-    writeToDestination(destination, textEncoder.encode(stringChunk));
+function writeChunks(
+  destination: Destination,
+  chunks: (PrecomputedChunk | Chunk)[],
+) {
+  if (chunks.length === 0) {
     return;
   }
 
-  let target: Uint8Array = (currentView: any);
-  if (writtenBytes > 0) {
-    target = ((currentView: any): Uint8Array).subarray(writtenBytes);
+  // eslint-disable-next-line no-for-of-loops/no-for-of-loops
+  // for (const mixChunk of chunks) {
+  //   if (typeof mixChunk === 'string') {
+  //     writeStringChunk(destination, mixChunk);
+  //   } else {
+  //     writeViewChunk(destination, mixChunk);
+  //   }
+  // }
+  const waitToWriteArray: Uint8Array[] = [];
+  function _writeToDestination(_destination, view) {
+    waitToWriteArray.push(new Uint8Array(view));
   }
-  const {read, written} = textEncoder.encodeInto(stringChunk, target);
-  writtenBytes += written;
+  const chunksLength = chunks.length;
+  // eslint-disable-next-line no-for-of-loops/no-for-of-loops
+  for (const [i, mixChunk] of chunks.entries()) {
+    let mergedString = '';
+    if (typeof mixChunk === 'string') {
+      let stringChunk = mixChunk;
+      if (stringChunk.length === 0) {
+        continue;
+      }
+      if (i + 1 < chunksLength && typeof chunks[i + 1] === 'string') {
+        mergedString += chunks[i];
+        continue;
+      } else if (mergedString) {
+        stringChunk = mergedString;
+        mergedString = '';
+      }
+      // maximum possible view needed to encode entire string
+      if (stringChunk.length * 3 > VIEW_SIZE) {
+        if (writtenBytes > 0) {
+          _writeToDestination(
+            destination,
+            ((currentView: any): Uint8Array).subarray(0, writtenBytes),
+          );
+          currentView = new Uint8Array(VIEW_SIZE);
+          writtenBytes = 0;
+        }
+        _writeToDestination(destination, textEncoder.encode(stringChunk));
+        // return;
+        continue;
+      }
 
-  if (read < stringChunk.length) {
-    writeToDestination(destination, (currentView: any));
-    currentView = new Uint8Array(VIEW_SIZE);
-    writtenBytes = textEncoder.encodeInto(stringChunk.slice(read), currentView)
-      .written;
-  }
+      let target: Uint8Array = (currentView: any);
+      if (writtenBytes > 0) {
+        target = ((currentView: any): Uint8Array).subarray(writtenBytes);
+      }
+      const {read, written} = textEncoder.encodeInto(stringChunk, target);
+      writtenBytes += written;
 
-  if (writtenBytes === VIEW_SIZE) {
-    writeToDestination(destination, (currentView: any));
-    currentView = new Uint8Array(VIEW_SIZE);
-    writtenBytes = 0;
-  }
-}
+      if (read < stringChunk.length) {
+        _writeToDestination(destination, (currentView: any));
+        currentView = new Uint8Array(VIEW_SIZE);
+        writtenBytes = textEncoder.encodeInto(
+          stringChunk.slice(read),
+          currentView,
+        ).written;
+      }
 
-function writeViewChunk(destination: Destination, chunk: PrecomputedChunk) {
-  if (chunk.byteLength === 0) {
-    return;
-  }
-  if (chunk.byteLength > VIEW_SIZE) {
-    // this chunk may overflow a single view which implies it was not
-    // one that is cached by the streaming renderer. We will enqueu
-    // it directly and expect it is not re-used
-    if (writtenBytes > 0) {
-      writeToDestination(
-        destination,
-        ((currentView: any): Uint8Array).subarray(0, writtenBytes),
-      );
-      currentView = new Uint8Array(VIEW_SIZE);
-      writtenBytes = 0;
-    }
-    writeToDestination(destination, chunk);
-    return;
-  }
-
-  let bytesToWrite = chunk;
-  const allowableBytes = ((currentView: any): Uint8Array).length - writtenBytes;
-  if (allowableBytes < bytesToWrite.byteLength) {
-    // this chunk would overflow the current view. We enqueue a full view
-    // and start a new view with the remaining chunk
-    if (allowableBytes === 0) {
-      // the current view is already full, send it
-      writeToDestination(destination, (currentView: any));
+      if (writtenBytes === VIEW_SIZE) {
+        _writeToDestination(destination, (currentView: any));
+        currentView = new Uint8Array(VIEW_SIZE);
+        writtenBytes = 0;
+      }
     } else {
-      // fill up the current view and apply the remaining chunk bytes
-      // to a new view.
-      ((currentView: any): Uint8Array).set(
-        bytesToWrite.subarray(0, allowableBytes),
-        writtenBytes,
-      );
-      writtenBytes += allowableBytes;
-      writeToDestination(destination, (currentView: any));
-      bytesToWrite = bytesToWrite.subarray(allowableBytes);
-    }
-    currentView = new Uint8Array(VIEW_SIZE);
-    writtenBytes = 0;
-  }
-  ((currentView: any): Uint8Array).set(bytesToWrite, writtenBytes);
-  writtenBytes += bytesToWrite.byteLength;
+      const chunk = mixChunk;
+      if (chunk.byteLength === 0) {
+        continue;
+      }
+      if (chunk.byteLength > VIEW_SIZE) {
+        // this chunk may overflow a single view which implies it was not
+        // one that is cached by the streaming renderer. We will enqueu
+        // it directly and expect it is not re-used
+        if (writtenBytes > 0) {
+          _writeToDestination(
+            destination,
+            ((currentView: any): Uint8Array).subarray(0, writtenBytes),
+          );
+          currentView = new Uint8Array(VIEW_SIZE);
+          writtenBytes = 0;
+        }
+        _writeToDestination(destination, chunk);
+        continue;
+      }
 
-  if (writtenBytes === VIEW_SIZE) {
-    writeToDestination(destination, (currentView: any));
-    currentView = new Uint8Array(VIEW_SIZE);
-    writtenBytes = 0;
+      let bytesToWrite = chunk;
+      const allowableBytes =
+        ((currentView: any): Uint8Array).length - writtenBytes;
+      if (allowableBytes < bytesToWrite.byteLength) {
+        // this chunk would overflow the current view. We enqueue a full view
+        // and start a new view with the remaining chunk
+        if (allowableBytes === 0) {
+          // the current view is already full, send it
+          _writeToDestination(destination, (currentView: any));
+        } else {
+          // fill up the current view and apply the remaining chunk bytes
+          // to a new view.
+          ((currentView: any): Uint8Array).set(
+            bytesToWrite.subarray(0, allowableBytes),
+            writtenBytes,
+          );
+          writtenBytes += allowableBytes;
+          _writeToDestination(destination, (currentView: any));
+          bytesToWrite = bytesToWrite.subarray(allowableBytes);
+        }
+        currentView = new Uint8Array(VIEW_SIZE);
+        writtenBytes = 0;
+      }
+      ((currentView: any): Uint8Array).set(bytesToWrite, writtenBytes);
+      writtenBytes += bytesToWrite.byteLength;
+
+      if (writtenBytes === VIEW_SIZE) {
+        _writeToDestination(destination, (currentView: any));
+        currentView = new Uint8Array(VIEW_SIZE);
+        writtenBytes = 0;
+      }
+    }
   }
+  writeToDestination(destination, mergeUint8Arrays(waitToWriteArray));
 }
+
+/*
+function writeStringChunks(destination: Destination, stringChunks: string[]) {
+  if (stringChunks.length === 0) {
+    return;
+  }
+  const waitToWriteArray: Uint8Array[] = [];
+  function _writeToDestination(_destination, view) {
+    waitToWriteArray.push(new Uint8Array(view));
+  }
+  // eslint-disable-next-line no-for-of-loops/no-for-of-loops
+  for (const stringChunk of stringChunks) {
+    if (stringChunk.length === 0) {
+      continue;
+    }
+    // maximum possible view needed to encode entire string
+    if (stringChunk.length * 3 > VIEW_SIZE) {
+      if (writtenBytes > 0) {
+        _writeToDestination(
+          destination,
+          ((currentView: any): Uint8Array).subarray(0, writtenBytes),
+        );
+        currentView = new Uint8Array(VIEW_SIZE);
+        writtenBytes = 0;
+      }
+      _writeToDestination(destination, textEncoder.encode(stringChunk));
+      // return;
+      continue;
+    }
+
+    let target: Uint8Array = (currentView: any);
+    if (writtenBytes > 0) {
+      target = ((currentView: any): Uint8Array).subarray(writtenBytes);
+    }
+    const {read, written} = textEncoder.encodeInto(stringChunk, target);
+    writtenBytes += written;
+
+    if (read < stringChunk.length) {
+      _writeToDestination(destination, (currentView: any));
+      currentView = new Uint8Array(VIEW_SIZE);
+      writtenBytes = textEncoder.encodeInto(
+        stringChunk.slice(read),
+        currentView,
+      ).written;
+    }
+
+    if (writtenBytes === VIEW_SIZE) {
+      _writeToDestination(destination, (currentView: any));
+      currentView = new Uint8Array(VIEW_SIZE);
+      writtenBytes = 0;
+    }
+  }
+  writeToDestination(destination, mergeUint8Arrays(waitToWriteArray));
+}
+*/
+
+// function writeStringChunk(destination: Destination, stringChunk: string) {
+//   if (stringChunk.length === 0) {
+//     return;
+//   }
+//   // maximum possible view needed to encode entire string
+//   if (stringChunk.length * 3 > VIEW_SIZE) {
+//     if (writtenBytes > 0) {
+//       writeToDestination(
+//         destination,
+//         ((currentView: any): Uint8Array).subarray(0, writtenBytes),
+//       );
+//       currentView = new Uint8Array(VIEW_SIZE);
+//       writtenBytes = 0;
+//     }
+//     writeToDestination(destination, textEncoder.encode(stringChunk));
+//     return;
+//   }
+
+//   let target: Uint8Array = (currentView: any);
+//   if (writtenBytes > 0) {
+//     target = ((currentView: any): Uint8Array).subarray(writtenBytes);
+//   }
+//   const {read, written} = textEncoder.encodeInto(stringChunk, target);
+//   writtenBytes += written;
+
+//   if (read < stringChunk.length) {
+//     writeToDestination(destination, (currentView: any));
+//     currentView = new Uint8Array(VIEW_SIZE);
+//     writtenBytes = textEncoder.encodeInto(stringChunk.slice(read), currentView)
+//       .written;
+//   }
+
+//   if (writtenBytes === VIEW_SIZE) {
+//     writeToDestination(destination, (currentView: any));
+//     currentView = new Uint8Array(VIEW_SIZE);
+//     writtenBytes = 0;
+//   }
+// }
+
+/*
+function writeViewChunks(destination: Destination, chunks: PrecomputedChunk[]) {
+  if (chunks.length === 0) {
+    return;
+  }
+  const waitToWriteArray: Uint8Array[] = [];
+  function _writeToDestination(_destination, view) {
+    waitToWriteArray.push(new Uint8Array(view));
+  }
+  // eslint-disable-next-line no-for-of-loops/no-for-of-loops
+  for (const chunk of chunks) {
+    if (chunk.byteLength === 0) {
+      continue;
+    }
+    if (chunk.byteLength > VIEW_SIZE) {
+      // this chunk may overflow a single view which implies it was not
+      // one that is cached by the streaming renderer. We will enqueu
+      // it directly and expect it is not re-used
+      if (writtenBytes > 0) {
+        _writeToDestination(
+          destination,
+          ((currentView: any): Uint8Array).subarray(0, writtenBytes),
+        );
+        currentView = new Uint8Array(VIEW_SIZE);
+        writtenBytes = 0;
+      }
+      _writeToDestination(destination, chunk);
+      continue;
+    }
+
+    let bytesToWrite = chunk;
+    const allowableBytes =
+      ((currentView: any): Uint8Array).length - writtenBytes;
+    if (allowableBytes < bytesToWrite.byteLength) {
+      // this chunk would overflow the current view. We enqueue a full view
+      // and start a new view with the remaining chunk
+      if (allowableBytes === 0) {
+        // the current view is already full, send it
+        _writeToDestination(destination, (currentView: any));
+      } else {
+        // fill up the current view and apply the remaining chunk bytes
+        // to a new view.
+        ((currentView: any): Uint8Array).set(
+          bytesToWrite.subarray(0, allowableBytes),
+          writtenBytes,
+        );
+        writtenBytes += allowableBytes;
+        _writeToDestination(destination, (currentView: any));
+        bytesToWrite = bytesToWrite.subarray(allowableBytes);
+      }
+      currentView = new Uint8Array(VIEW_SIZE);
+      writtenBytes = 0;
+    }
+    ((currentView: any): Uint8Array).set(bytesToWrite, writtenBytes);
+    writtenBytes += bytesToWrite.byteLength;
+
+    if (writtenBytes === VIEW_SIZE) {
+      _writeToDestination(destination, (currentView: any));
+      currentView = new Uint8Array(VIEW_SIZE);
+      writtenBytes = 0;
+    }
+  }
+  writeToDestination(destination, mergeUint8Arrays(waitToWriteArray));
+}
+*/
+
+// function writeViewChunk(destination: Destination, chunk: PrecomputedChunk) {
+//   if (chunk.byteLength === 0) {
+//     return;
+//   }
+//   if (chunk.byteLength > VIEW_SIZE) {
+//     // this chunk may overflow a single view which implies it was not
+//     // one that is cached by the streaming renderer. We will enqueu
+//     // it directly and expect it is not re-used
+//     if (writtenBytes > 0) {
+//       writeToDestination(
+//         destination,
+//         ((currentView: any): Uint8Array).subarray(0, writtenBytes),
+//       );
+//       currentView = new Uint8Array(VIEW_SIZE);
+//       writtenBytes = 0;
+//     }
+//     writeToDestination(destination, chunk);
+//     return;
+//   }
+
+//   let bytesToWrite = chunk;
+//   const allowableBytes = ((currentView: any): Uint8Array).length - writtenBytes;
+//   if (allowableBytes < bytesToWrite.byteLength) {
+//     // this chunk would overflow the current view. We enqueue a full view
+//     // and start a new view with the remaining chunk
+//     if (allowableBytes === 0) {
+//       // the current view is already full, send it
+//       writeToDestination(destination, (currentView: any));
+//     } else {
+//       // fill up the current view and apply the remaining chunk bytes
+//       // to a new view.
+//       ((currentView: any): Uint8Array).set(
+//         bytesToWrite.subarray(0, allowableBytes),
+//         writtenBytes,
+//       );
+//       writtenBytes += allowableBytes;
+//       writeToDestination(destination, (currentView: any));
+//       bytesToWrite = bytesToWrite.subarray(allowableBytes);
+//     }
+//     currentView = new Uint8Array(VIEW_SIZE);
+//     writtenBytes = 0;
+//   }
+//   ((currentView: any): Uint8Array).set(bytesToWrite, writtenBytes);
+//   writtenBytes += bytesToWrite.byteLength;
+
+//   if (writtenBytes === VIEW_SIZE) {
+//     writeToDestination(destination, (currentView: any));
+//     currentView = new Uint8Array(VIEW_SIZE);
+//     writtenBytes = 0;
+//   }
+// }
 
 export function writeChunk(
   destination: Destination,
-  chunk: PrecomputedChunk | Chunk,
+  chunks: (PrecomputedChunk | Chunk)[],
 ): void {
-  if (typeof chunk === 'string') {
-    writeStringChunk(destination, chunk);
-  } else {
-    writeViewChunk(destination, ((chunk: any): PrecomputedChunk));
-  }
+  writeChunks(destination, chunks);
+  // if (typeof chunk === 'string') {
+  //   writeStringChunks(destination, chunks);
+  // } else {
+  //   writeViewChunks(destination, ((chunks: any): PrecomputedChunk[]));
+  // }
 }
 
 function writeToDestination(destination: Destination, view: Uint8Array) {
@@ -156,7 +424,7 @@ export function writeChunkAndReturn(
   destination: Destination,
   chunk: PrecomputedChunk | Chunk,
 ): boolean {
-  writeChunk(destination, chunk);
+  writeChunk(destination, [chunk]);
   return destinationHasCapacity;
 }
 
