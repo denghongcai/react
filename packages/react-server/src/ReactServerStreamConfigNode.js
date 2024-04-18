@@ -246,44 +246,44 @@ function writeStringChunks(destination: Destination, stringChunks: string[]) {
 }
 */
 
-// function writeStringChunk(destination: Destination, stringChunk: string) {
-//   if (stringChunk.length === 0) {
-//     return;
-//   }
-//   // maximum possible view needed to encode entire string
-//   if (stringChunk.length * 3 > VIEW_SIZE) {
-//     if (writtenBytes > 0) {
-//       writeToDestination(
-//         destination,
-//         ((currentView: any): Uint8Array).subarray(0, writtenBytes),
-//       );
-//       currentView = new Uint8Array(VIEW_SIZE);
-//       writtenBytes = 0;
-//     }
-//     writeToDestination(destination, textEncoder.encode(stringChunk));
-//     return;
-//   }
+function writeStringChunk(destination: Destination, stringChunk: string) {
+  if (stringChunk.length === 0) {
+    return;
+  }
+  // maximum possible view needed to encode entire string
+  if (stringChunk.length * 3 > VIEW_SIZE) {
+    if (writtenBytes > 0) {
+      writeToDestination(
+        destination,
+        ((currentView: any): Uint8Array).subarray(0, writtenBytes),
+      );
+      currentView = new Uint8Array(VIEW_SIZE);
+      writtenBytes = 0;
+    }
+    writeToDestination(destination, textEncoder.encode(stringChunk));
+    return;
+  }
 
-//   let target: Uint8Array = (currentView: any);
-//   if (writtenBytes > 0) {
-//     target = ((currentView: any): Uint8Array).subarray(writtenBytes);
-//   }
-//   const {read, written} = textEncoder.encodeInto(stringChunk, target);
-//   writtenBytes += written;
+  let target: Uint8Array = (currentView: any);
+  if (writtenBytes > 0) {
+    target = ((currentView: any): Uint8Array).subarray(writtenBytes);
+  }
+  const {read, written} = textEncoder.encodeInto(stringChunk, target);
+  writtenBytes += written;
 
-//   if (read < stringChunk.length) {
-//     writeToDestination(destination, (currentView: any));
-//     currentView = new Uint8Array(VIEW_SIZE);
-//     writtenBytes = textEncoder.encodeInto(stringChunk.slice(read), currentView)
-//       .written;
-//   }
+  if (read < stringChunk.length) {
+    writeToDestination(destination, (currentView: any));
+    currentView = new Uint8Array(VIEW_SIZE);
+    writtenBytes = textEncoder.encodeInto(stringChunk.slice(read), currentView)
+      .written;
+  }
 
-//   if (writtenBytes === VIEW_SIZE) {
-//     writeToDestination(destination, (currentView: any));
-//     currentView = new Uint8Array(VIEW_SIZE);
-//     writtenBytes = 0;
-//   }
-// }
+  if (writtenBytes === VIEW_SIZE) {
+    writeToDestination(destination, (currentView: any));
+    currentView = new Uint8Array(VIEW_SIZE);
+    writtenBytes = 0;
+  }
+}
 
 /*
 function writeViewChunks(destination: Destination, chunks: PrecomputedChunk[]) {
@@ -351,63 +351,72 @@ function writeViewChunks(destination: Destination, chunks: PrecomputedChunk[]) {
 }
 */
 
-// function writeViewChunk(destination: Destination, chunk: PrecomputedChunk) {
-//   if (chunk.byteLength === 0) {
-//     return;
-//   }
-//   if (chunk.byteLength > VIEW_SIZE) {
-//     // this chunk may overflow a single view which implies it was not
-//     // one that is cached by the streaming renderer. We will enqueu
-//     // it directly and expect it is not re-used
-//     if (writtenBytes > 0) {
-//       writeToDestination(
-//         destination,
-//         ((currentView: any): Uint8Array).subarray(0, writtenBytes),
-//       );
-//       currentView = new Uint8Array(VIEW_SIZE);
-//       writtenBytes = 0;
-//     }
-//     writeToDestination(destination, chunk);
-//     return;
-//   }
+function writeViewChunk(destination: Destination, chunk: PrecomputedChunk) {
+  if (chunk.byteLength === 0) {
+    return;
+  }
+  // if (typeof chunk !== 'object') {
+  //   console.log('invalid chunk', chunk);
+  // }
+  if (chunk.byteLength > VIEW_SIZE) {
+    // this chunk may overflow a single view which implies it was not
+    // one that is cached by the streaming renderer. We will enqueu
+    // it directly and expect it is not re-used
+    if (writtenBytes > 0) {
+      writeToDestination(
+        destination,
+        ((currentView: any): Uint8Array).subarray(0, writtenBytes),
+      );
+      currentView = new Uint8Array(VIEW_SIZE);
+      writtenBytes = 0;
+    }
+    writeToDestination(destination, chunk);
+    return;
+  }
 
-//   let bytesToWrite = chunk;
-//   const allowableBytes = ((currentView: any): Uint8Array).length - writtenBytes;
-//   if (allowableBytes < bytesToWrite.byteLength) {
-//     // this chunk would overflow the current view. We enqueue a full view
-//     // and start a new view with the remaining chunk
-//     if (allowableBytes === 0) {
-//       // the current view is already full, send it
-//       writeToDestination(destination, (currentView: any));
-//     } else {
-//       // fill up the current view and apply the remaining chunk bytes
-//       // to a new view.
-//       ((currentView: any): Uint8Array).set(
-//         bytesToWrite.subarray(0, allowableBytes),
-//         writtenBytes,
-//       );
-//       writtenBytes += allowableBytes;
-//       writeToDestination(destination, (currentView: any));
-//       bytesToWrite = bytesToWrite.subarray(allowableBytes);
-//     }
-//     currentView = new Uint8Array(VIEW_SIZE);
-//     writtenBytes = 0;
-//   }
-//   ((currentView: any): Uint8Array).set(bytesToWrite, writtenBytes);
-//   writtenBytes += bytesToWrite.byteLength;
+  let bytesToWrite = chunk;
+  const allowableBytes = ((currentView: any): Uint8Array).length - writtenBytes;
+  if (allowableBytes < bytesToWrite.byteLength) {
+    // this chunk would overflow the current view. We enqueue a full view
+    // and start a new view with the remaining chunk
+    if (allowableBytes === 0) {
+      // the current view is already full, send it
+      writeToDestination(destination, (currentView: any));
+    } else {
+      // fill up the current view and apply the remaining chunk bytes
+      // to a new view.
+      ((currentView: any): Uint8Array).set(
+        bytesToWrite.subarray(0, allowableBytes),
+        writtenBytes,
+      );
+      writtenBytes += allowableBytes;
+      writeToDestination(destination, (currentView: any));
+      bytesToWrite = bytesToWrite.subarray(allowableBytes);
+    }
+    currentView = new Uint8Array(VIEW_SIZE);
+    writtenBytes = 0;
+  }
+  ((currentView: any): Uint8Array).set(bytesToWrite, writtenBytes);
+  writtenBytes += bytesToWrite.byteLength;
 
-//   if (writtenBytes === VIEW_SIZE) {
-//     writeToDestination(destination, (currentView: any));
-//     currentView = new Uint8Array(VIEW_SIZE);
-//     writtenBytes = 0;
-//   }
-// }
+  if (writtenBytes === VIEW_SIZE) {
+    writeToDestination(destination, (currentView: any));
+    currentView = new Uint8Array(VIEW_SIZE);
+    writtenBytes = 0;
+  }
+}
 
 export function writeChunk(
   destination: Destination,
-  chunks: (PrecomputedChunk | Chunk)[],
+  chunks: (PrecomputedChunk | Chunk)[] | (PrecomputedChunk | Chunk),
 ): void {
-  writeChunks(destination, chunks);
+  if (typeof chunks === 'string') {
+    writeStringChunk(destination, chunks);
+  } else if (chunks && chunks.byteLength) {
+    writeViewChunk(destination, chunks);
+  } else {
+    writeChunks(destination, chunks);
+  }
   // if (typeof chunk === 'string') {
   //   writeStringChunks(destination, chunks);
   // } else {

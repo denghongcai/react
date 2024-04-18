@@ -1823,7 +1823,8 @@ function flushSubtree(
       }
       // Finally just write all the remaining chunks
       if (chunkIdx < chunks.length - 1) {
-        writeChunk(destination, chunks.slice(chunkIdx));
+        writeChunk(destination, chunks.slice(chunkIdx, chunks.length - 1));
+        chunkIdx = chunks.length - 1;
       }
       // for (; chunkIdx < chunks.length - 1; chunkIdx++) {
       //   writeChunk(destination, chunks[chunkIdx]);

@@ -1558,8 +1558,12 @@ export function writeCompletedRoot(
 ): boolean {
   const bootstrapChunks = responseState.bootstrapChunks;
   let i = 0;
-  for (; i < bootstrapChunks.length - 1; i++) {
-    writeChunk(destination, bootstrapChunks[i]);
+  if (i < bootstrapChunks.length - 1) {
+    writeChunk(
+      destination,
+      bootstrapChunks.slice(i, bootstrapChunks.length - 1),
+    );
+    i = bootstrapChunks.length - 1;
   }
   if (i < bootstrapChunks.length) {
     return writeChunkAndReturn(destination, bootstrapChunks[i]);
@@ -1579,10 +1583,10 @@ export function writePlaceholder(
   responseState: ResponseState,
   id: number,
 ): boolean {
-  writeChunk(destination, placeholder1);
-  writeChunk(destination, responseState.placeholderPrefix);
-  const formattedID = stringToChunk(id.toString(16));
-  writeChunk(destination, formattedID);
+  writeChunk(destination, [placeholder1, responseState.placeholderPrefix, stringToChunk(id.toString(16))]);
+  // writeChunk(destination, responseState.placeholderPrefix);
+  // const formattedID = stringToChunk(id.toString(16));
+  // writeChunk(destination, formattedID);
   return writeChunkAndReturn(destination, placeholder2);
 }
 
@@ -1664,12 +1668,12 @@ export function writeStartClientRenderedSuspenseBoundary(
   );
   writeChunk(destination, clientRenderedSuspenseBoundaryError1);
   if (errorDigest) {
-    writeChunk(destination, clientRenderedSuspenseBoundaryError1A);
-    writeChunk(destination, stringToChunk(escapeTextForBrowser(errorDigest)));
-    writeChunk(
-      destination,
-      clientRenderedSuspenseBoundaryErrorAttrInterstitial,
-    );
+    writeChunk(destination, [clientRenderedSuspenseBoundaryError1A, stringToChunk(escapeTextForBrowser(errorDigest)), clientRenderedSuspenseBoundaryErrorAttrInterstitial]);
+    // writeChunk(destination, stringToChunk(escapeTextForBrowser(errorDigest)));
+    // writeChunk(
+    //   destination,
+    //   clientRenderedSuspenseBoundaryErrorAttrInterstitial,
+    // );
   }
   if (__DEV__) {
     if (errorMesssage) {
@@ -1765,9 +1769,9 @@ export function writeStartSegment(
   switch (formatContext.insertionMode) {
     case ROOT_HTML_MODE:
     case HTML_MODE: {
-      writeChunk(destination, startSegmentHTML);
-      writeChunk(destination, responseState.segmentPrefix);
-      writeChunk(destination, stringToChunk(id.toString(16)));
+      writeChunk(destination, [startSegmentHTML, responseState.segmentPrefix, stringToChunk(id.toString(16))]);
+      // writeChunk(destination, responseState.segmentPrefix);
+      // writeChunk(destination, stringToChunk(id.toString(16)));
       return writeChunkAndReturn(destination, startSegmentHTML2);
     }
     case SVG_MODE: {
@@ -1986,12 +1990,12 @@ export function writeCompletedSegmentInstruction(
     // Future calls can just reuse the same function.
     writeChunk(destination, completeSegmentScript1Partial);
   }
-  writeChunk(destination, responseState.segmentPrefix);
   const formattedID = stringToChunk(contentSegmentID.toString(16));
-  writeChunk(destination, formattedID);
-  writeChunk(destination, completeSegmentScript2);
-  writeChunk(destination, responseState.placeholderPrefix);
-  writeChunk(destination, formattedID);
+  writeChunk(destination, [responseState.segmentPrefix, formattedID, completeSegmentScript2, responseState.placeholderPrefix, formattedID]);
+  // writeChunk(destination, formattedID);
+  // writeChunk(destination, completeSegmentScript2);
+  // writeChunk(destination, responseState.placeholderPrefix);
+  // writeChunk(destination, formattedID);
   return writeChunkAndReturn(destination, completeSegmentScript3);
 }
 
@@ -2025,10 +2029,10 @@ export function writeCompletedBoundaryInstruction(
   }
 
   const formattedContentID = stringToChunk(contentSegmentID.toString(16));
-  writeChunk(destination, boundaryID);
-  writeChunk(destination, completeBoundaryScript2);
-  writeChunk(destination, responseState.segmentPrefix);
-  writeChunk(destination, formattedContentID);
+  writeChunk(destination, [boundaryID, completeBoundaryScript2, responseState.segmentPrefix, formattedContentID]);
+  // writeChunk(destination, completeBoundaryScript2);
+  // writeChunk(destination, responseState.segmentPrefix);
+  // writeChunk(destination, formattedContentID);
   return writeChunkAndReturn(destination, completeBoundaryScript3);
 }
 
@@ -2064,8 +2068,8 @@ export function writeClientRenderBoundaryInstruction(
     );
   }
 
-  writeChunk(destination, boundaryID);
-  writeChunk(destination, clientRenderScript1A);
+  writeChunk(destination, [boundaryID, clientRenderScript1A]);
+  // writeChunk(destination, clientRenderScript1A);
   if (errorDigest || errorMessage || errorComponentStack) {
     writeChunk(destination, clientRenderErrorScriptArgInterstitial);
     writeChunk(
