@@ -299,36 +299,36 @@ const bundles = [
   //     }),
   // },
 
-  // /******* React DOM Fizz Server *******/
-  // {
-  //   bundleTypes: [NODE_DEV, NODE_PROD, UMD_DEV, UMD_PROD],
-  //   moduleType: RENDERER,
-  //   entry: 'react-dom/src/server/ReactDOMFizzServerBrowser.js',
-  //   name: 'react-dom-server.browser',
-  //   global: 'ReactDOMServer',
-  //   minifyWithProdErrorCodes: true,
-  //   wrapWithModuleBoundaries: false,
-  //   externals: ['react'],
-  // },
-  // {
-  //   bundleTypes: [NODE_DEV, NODE_PROD],
-  //   moduleType: RENDERER,
-  //   entry: 'react-dom/src/server/ReactDOMFizzServerNode.js',
-  //   name: 'react-dom-server.node',
-  //   global: 'ReactDOMServer',
-  //   minifyWithProdErrorCodes: false,
-  //   wrapWithModuleBoundaries: false,
-  //   externals: ['react', 'util'],
-  // },
-  // {
-  //   bundleTypes: __EXPERIMENTAL__ ? [FB_WWW_DEV, FB_WWW_PROD] : [],
-  //   moduleType: RENDERER,
-  //   entry: 'react-server-dom-relay/src/ReactDOMServerFB.js',
-  //   global: 'ReactDOMServerStreaming',
-  //   minifyWithProdErrorCodes: false,
-  //   wrapWithModuleBoundaries: false,
-  //   externals: ['react'],
-  // },
+  /******* React DOM Fizz Server *******/
+  {
+    bundleTypes: [NODE_DEV, NODE_PROD, UMD_DEV, UMD_PROD],
+    moduleType: RENDERER,
+    entry: 'react-dom/src/server/ReactDOMFizzServerBrowser.js',
+    name: 'react-dom-server.browser',
+    global: 'ReactDOMServer',
+    minifyWithProdErrorCodes: true,
+    wrapWithModuleBoundaries: false,
+    externals: ['react'],
+  },
+  {
+    bundleTypes: [NODE_DEV, NODE_PROD],
+    moduleType: RENDERER,
+    entry: 'react-dom/src/server/ReactDOMFizzServerNode.js',
+    name: 'react-dom-server.node',
+    global: 'ReactDOMServer',
+    minifyWithProdErrorCodes: false,
+    wrapWithModuleBoundaries: false,
+    externals: ['react', 'util'],
+  },
+  {
+    bundleTypes: __EXPERIMENTAL__ ? [FB_WWW_DEV, FB_WWW_PROD] : [],
+    moduleType: RENDERER,
+    entry: 'react-server-dom-relay/src/ReactDOMServerFB.js',
+    global: 'ReactDOMServerStreaming',
+    minifyWithProdErrorCodes: false,
+    wrapWithModuleBoundaries: false,
+    externals: ['react'],
+  },
 
   // /******* React Server DOM Webpack Writer *******/
   // {
